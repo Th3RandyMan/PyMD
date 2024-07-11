@@ -1,2 +1,2 @@
-from sections import *
-from utils import *
+from .sections import *
+from .utils import *

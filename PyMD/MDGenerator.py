@@ -12,21 +12,6 @@ from tools.utils import is_file_type
 from tools.sections import *
 
 
-# def process_heading(heading:str) -> str:
-#     """
-#     Process the heading to remove any empty headers and return the final heading.
-
-#     Args:
-#         heading (str): Heading to process.
-
-#     Returns:
-#         str: Processed heading.
-#     """
-#     headers = heading.split("/") # Split the heading into subheadings
-#     for i in range(1, len(headers)):    # Remove any empty headers except the first one
-#         if headers[i] == "":
-#             headers.pop(i)
-#     return "/".join(headers)
 
 class MDGenerator:
     """
@@ -65,15 +50,21 @@ class MDGenerator:
             raise TypeError("save_path must be a str or Path object")
 
         self.save_path.mkdir(parents=True, exist_ok=True)
-        self.title = title
-        self.author = author
+        if title is None:
+            self.title = ""
+        else:
+            self.title = title
+        if author is None:
+            self.author = ""
+        else:
+            self.author = author
         self.dpi = dpi
         
-        self.mdFile = MdUtils(file_name=str(self.save_path) + file_name + ".md", title=title, author=author)
+        self.mdFile = MdUtils(file_name=str(self.save_path / (file_name + ".md")), title=self.title, author=self.author)
         self.sections:Dict[Section] = {}
         self.section_headers:List[str] = []
 
-    def add_section(self, heading:Optional[str], section:Optional[BaseSection] = None) -> bool:
+    def add_section(self, heading:Optional[str], section:Optional[BaseSection] = None) -> BaseSection:
         """
         Create a new section in the markdown file.
 
@@ -85,31 +76,38 @@ class MDGenerator:
         Returns:
             bool: True if the section was added successfully, False if the section already exists.
         """
+        type_section = False
+        if isinstance(section, Section):
+            type_section = True
+
         if heading is None:
             heading = ""
         elif heading[0] == "/": # Remove the first slash if it exists
             heading = heading[1:]
         headers = heading.split("/") # Split the heading into subheadings
         head = headers[0]
-        result = False
 
         if len(headers) == 1:  # If there is only one heading left, check if it is this section
             if head not in self.sections.keys():  # If the section does not exist, create it
-                if section is None:
-                    self.sections[head] = Section(self.mdFile, head, "")
-                    self.section_headers.append(head)
+                self.sections[head] = Section(self.mdFile, head, "")
+                self.section_headers.append(head)
+                if section is not None:
+                    section = self.sections[head].add_section(None, section)
                 else:
-                    self.sections[head] = section
-                result = True
-            else:
-                return result    # Section already exists
+                    section = self.sections[head]
+            elif section is not None:
+                section = self.sections[head].add_section(None, section)
         elif len(headers) > 1:
             if head not in self.sections.keys():  # If the section does not exist, create it
                 self.sections[head] = Section(self.mdFile, head, "")
                 self.section_headers.append(head)
-            result = self.sections[head].add_section("/".join(headers[1:]), head, section, self.section_headers)   # Recursively add the section to the next level
+
+            section = self.sections[head].add_section("/".join(headers[1:]), section, self.section_headers)   # Recursively add the section to the next level
         
-        return result
+        if type_section and section is not None:    # If given object is a Section object, missed adding the section to the section list
+            self.section_headers.append(heading)
+
+        return section
 
         
     def add_text(self, heading:str, text:str) -> bool:
@@ -138,6 +136,7 @@ class MDGenerator:
         Args:
             heading (str): Heading of the section.
             figure (Union[Figure,str]): Figure object or path to the image.
+                - If a path is given, give relative path, not absolute path.
             caption (str, optional): Caption for the image. Defaults to None.
 
         Returns:
@@ -151,7 +150,7 @@ class MDGenerator:
 
         if isinstance(figure, Figure):
             # Save the figure
-            image_path = self.save_path / MDGenerator.FIGURE_FOLDER #str(self.save_path) + "/" + f"image{self.image}.png"
+            image_path = self.save_path / MDGenerator.FIGURE_FOLDER
             if not image_path.exists():
                 image_path.mkdir()
             image_path = image_path / f"image{self.image}.png"
@@ -286,8 +285,41 @@ class MDGenerator:
     
 
 if __name__ == "__main__":
-    mdGen = MDGenerator()
+    mdGen = MDGenerator("example", title="Generated Markdown", author="Author")
     mdGen.add_text("Section 1", "This is the first section.")
     mdGen.add_text("Section 2", "This is the second section.")
-    #mdGen.add_image("Section 3", "image.png", "This is an image.")
-    mdGen.mdFile.create_md_file()
+    mdGen.add_code("Section 2", "print('Hello, World!')")
+    mdGen.add_text("Section 1/Subsection 1", "This is a subsection of the first section.")
+    mdGen.add_text("Section 1/Subsection 2", "This is a subsection of the first section.")
+    mdGen.add_text("Section 1/Subsection 2/Subsubsection 1", "This is a subsubsection of the second subsection.")
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    # Generate random data
+    x = np.linspace(0, 10, 100)
+    y = np.random.randn(100)
+
+    # Create a figure and plot the data
+    fig, ax = plt.subplots()
+    ax.plot(x, y)
+
+    # Add labels and title
+    ax.set_xlabel('X-axis')
+    ax.set_ylabel('Y-axis')
+    ax.set_title('Random Figure')
+
+    # Add the image to the markdown file
+    mdGen.add_image("Section 1", fig, "This is a random figure.")
+
+    # Add a list to the markdown file
+    mdGen.add_list("Section 2", ["Item 1", "Item 2", "Item 3"])
+
+    # Add a link to the markdown file
+    mdGen.add_link("Section 2", "https://www.google.com", "Google")
+
+    # Add a checkbox list to the markdown file
+    mdGen.add_checkbox("Section 2", ["Check 1", "Check 2", "Check 3"], [True, False, True])
+
+    # Save the markdown file
+    mdGen.save()
