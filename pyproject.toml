@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "PyMD"
+version = "1.0.0"
+description = "Library for recording in a markdown file."
+readme = "README.md"
+authors = [
+    { name = "Randall Fowler", email = "randallfowler77@yahoo.com"}
+]
+dependencies = [
+    "mdutils",
+    "matplotlib",
+]
+requires-python = ">=3.6"
+license = {text = "MIT License"}
+keywords = ["markdown", "MarkDown", "generator", "report", "results", "evaluation"]
+
+[project.urls]
+Homepage = "https://github.com/Th3RandyMan/PyMD"
