@@ -1,8 +1,11 @@
 """
 Generate a markdown file with images and text.
 To do:
-    - Change section format to hold multiple sections.
-    - Add a method to save the file.
+    - Add dictionary inheritance for sections
+        - Add method to __call__ that allows for the addition of sections like text, code, image, etc.
+    - Add table section
+    - Add author write in
+    - Maybe add in deconstructor to save the file?
 """
 from matplotlib.figure import Figure
 from mdutils.mdutils import MdUtils
@@ -15,7 +18,7 @@ from tools.sections import *
 
 class MDGenerator:
     """
-
+    Class to generate a markdown file with images and text.
     """
     text:int = 0
     code:int = 0
@@ -27,7 +30,7 @@ class MDGenerator:
 
     FIGURE_FOLDER = "figures"
 
-    def __init__(self, save_path: Optional[Union[str,Path]] = None, file_name:str = "GeneratedMD", title:str = None, author:str = None, dpi:int = 300):
+    def __init__(self, save_path: Optional[Union[str,Path]] = None, file_name:str = "GeneratedMD", title:Optional[str] = None, author:Optional[str] = None, dpi:int = 300):
         """
         Args:
             save_path (Optional[Union[str,Path]], optional): Path to save the generated file. Defaults to None.
@@ -74,7 +77,7 @@ class MDGenerator:
                 - If None, a new Section object is created.
 
         Returns:
-            bool: True if the section was added successfully, False if the section already exists.
+            BaseSection: Section object that was added to the markdown file.
         """
         type_section = False
         if isinstance(section, Section):
@@ -110,13 +113,16 @@ class MDGenerator:
         return section
 
         
-    def add_text(self, heading:str, text:str) -> bool:
+    def add_text(self, heading:str, text:str) -> BaseSection:
         """
         Add text to a section in the markdown file.
 
         Args:
             heading (str): Heading of the section.
             text (str): Text to add to the section.
+
+        Returns:
+            BaseSection: Section object that was added to the markdown file.
         """
         if heading is None:
             heading = ""
@@ -129,7 +135,7 @@ class MDGenerator:
             self.text += 1
         return result
 
-    def add_image(self, heading:str, figure:Union[Figure,str], caption:str = None) -> bool:
+    def add_image(self, heading:str, figure:Union[Figure,str], caption:str = None) -> BaseSection:
         """
         Add an image to a section in the markdown file.
 
@@ -140,7 +146,7 @@ class MDGenerator:
             caption (str, optional): Caption for the image. Defaults to None.
 
         Returns:
-            bool: True if the image was added successfully, False if the section already exists.
+            BaseSection: Section object that was added to the markdown file.
         """
         if heading is None:
             heading = ""
@@ -162,7 +168,7 @@ class MDGenerator:
             self.image += 1
         return result
     
-    def add_code(self, heading:str, code:str, language:str = "python") -> bool:
+    def add_code(self, heading:str, code:str, language:str = "python") -> BaseSection:
         """
         Add code to a section in the markdown file.
 
@@ -172,7 +178,7 @@ class MDGenerator:
             language (str, optional): Language of the code. Defaults to "python".
 
         Returns:
-            bool: True if the code was added successfully, False if the section already exists.
+            BaseSection: Section object that was added to the markdown file.
         """
         if heading is None:
             heading = ""
@@ -185,7 +191,7 @@ class MDGenerator:
             self.code += 1
         return result
     
-    # def add_table(self, heading:str, table:List[List[str]]) -> bool:
+    # def add_table(self, heading:str, table:List[List[str]]) -> BaseSection:
     #     """
     #     Add a table to a section in the markdown file.
 
@@ -194,7 +200,7 @@ class MDGenerator:
     #         table (List[List[str]]): Table to add to the section.
 
     #     Returns:
-    #         bool: True if the table was added successfully, False if the section already exists.
+    #         BaseSection: Section object that was added to the markdown file.
     #     """
     #     if heading is None:
     #         heading = ""
@@ -207,7 +213,7 @@ class MDGenerator:
     #         self.table += 1
     #     return result
 
-    def add_list(self, heading:str, items:List[str]) -> bool:
+    def add_list(self, heading:str, items:List[str]) -> BaseSection:
         """
         Add a list to a section in the markdown file.
 
@@ -216,7 +222,7 @@ class MDGenerator:
             items (List[str]): Items to add to the list.
 
         Returns:
-            bool: True if the list was added successfully, False if the section already exists.
+            BaseSection: Section object that was added to the markdown file.
         """
         if heading is None:
             heading = ""
@@ -229,7 +235,7 @@ class MDGenerator:
             self.list += 1
         return result
     
-    def add_link(self, heading:str, link:str, text:str) -> bool:
+    def add_link(self, heading:str, link:str, text:str) -> BaseSection:
         """
         Add a link to a section in the markdown file.
 
@@ -239,7 +245,7 @@ class MDGenerator:
             text (str): Text to display for the link.
 
         Returns:
-            bool: True if the link was added successfully, False if the section already exists.
+            BaseSection: Section object that was added to the markdown file.
         """
         if heading is None:
             heading = ""
@@ -252,7 +258,7 @@ class MDGenerator:
             self.link += 1
         return result
     
-    def add_checkbox(self, heading:str, text_list:List[str], checked:Union[List[bool],bool] = False) -> bool:
+    def add_checkbox(self, heading:str, text_list:List[str], checked:Union[List[bool],bool] = False) -> BaseSection:
         """
         Add a checkbox list to a section in the markdown file.
 
@@ -262,7 +268,7 @@ class MDGenerator:
             checked (Union[List[bool],bool], optional): List of booleans to check each checkbox. Defaults to False.
 
         Returns:
-            bool: True if the checkbox list was added successfully, False if the section already exists.
+            BaseSection: Section object that was added to the markdown file.
         """
         if heading is None:
             heading = ""
