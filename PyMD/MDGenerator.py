@@ -10,7 +10,10 @@ To do:
 from matplotlib.figure import Figure
 from mdutils.mdutils import MdUtils
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Union, List
+
+from pandas import DataFrame
+import numpy as np
 from tools.utils import is_file_type
 from tools.sections import *
 
@@ -191,27 +194,48 @@ class MDGenerator:
             self.code += 1
         return result
     
-    # def add_table(self, heading:str, table:List[List[str]]) -> BaseSection:
-    #     """
-    #     Add a table to a section in the markdown file.
+    def add_table(self, heading:str, table:Union[DataFrame, np.ndarray, List[str]], columns:int=None, rows:int=None) -> BaseSection:
+        """
+        Add a table to a section in the markdown file.
 
-    #     Args:
-    #         heading (str): Heading of the section.
-    #         table (List[List[str]]): Table to add to the section.
+        Args:
+            heading (str): Heading of the section.
+            table (List[List[str]]): Table to add to the section.
 
-    #     Returns:
-    #         BaseSection: Section object that was added to the markdown file.
-    #     """
-    #     if heading is None:
-    #         heading = ""
-    #     elif heading[0] == "/":
-    #         heading = heading[1:]
-    #     section = TableSection(self.mdFile, heading, table)
-    #     result = self.add_section(heading, section)
+        Returns:
+            BaseSection: Section object that was added to the markdown file.
+        """
+        if heading is None:
+            heading = ""
+        elif heading[0] == "/":
+            heading = heading[1:]
 
-    #     if result:
-    #         self.table += 1
-    #     return result
+        if isinstance(table, DataFrame):
+            rows, columns = table.shape
+            col = table.columns.tolist()
+            rows += 1
+            table = col + [str(x) for x in table.values.flatten().tolist()]
+        elif isinstance(table, np.ndarray):
+            rows, columns = table.shape
+            col = [f"Column {x+1}" for x in range(table.shape[1])]
+            rows += 1
+            table = col + [str(x) for x in table.flatten().tolist()]
+        elif table is None:
+            raise ValueError("Table cannot be None.")
+            
+        # Check if table size is valid
+        if columns is not None and rows is not None:
+            if columns * rows != len(table):
+                raise ValueError("Table size does not match the number of rows and columns.")
+        else:
+            raise ValueError("Number of columns and rows must be specified.")
+            
+        section = TableSection(self.mdFile, heading, table, columns, rows)
+        result = self.add_section(heading, section)
+
+        if result:
+            self.table += 1
+        return result
 
     def add_list(self, heading:str, items:List[str]) -> BaseSection:
         """
@@ -326,6 +350,16 @@ if __name__ == "__main__":
 
     # Add a checkbox list to the markdown file
     mdGen.add_checkbox("Section 2", ["Check 1", "Check 2", "Check 3"], [True, False, True])
+
+    # Add a table to the markdown file
+    headers = ["Header 1", "Header 2", "Header 3", "Header 4"]
+    table = np.random.randint(0, 10, (6, 4))
+    df = DataFrame(table, columns=headers)
+
+    list_table = ["Header 1", "Header 2", "Header 3"] + [str(3*i + j) for i in range(3) for j in range(3)]
+    mdGen.add_table("Section 3/Numpy Array Table", table)
+    mdGen.add_table("Section 3/Python List Table", list_table, 3, 4)
+    mdGen.add_table("Section 3/Pandas DataFrame Table", df)
 
     # Save the markdown file
     mdGen.save()

@@ -81,9 +81,9 @@ class Section(BaseSection):
         elif isinstance(section, ImageSection):
             name = f"image{self.image}"
             self.image += 1
-        # elif isinstance(section, TableSection):
-        #     name = f"table{self.table}"
-        #     self.table += 1
+        elif isinstance(section, TableSection):
+            name = f"table{self.table}"
+            self.table += 1
         elif isinstance(section, ListSection):
             name = f"list{self.list}"
             self.list += 1
@@ -208,23 +208,25 @@ class ImageSection(BaseSection):
         return True
     
 
-# class TableSection(BaseSection):
-#     """
-#     Section to render a table in the markdown file.
-#     """
-#     def __init__(self, mdFile: MdUtils, location:str, table:dict):
-#         super().__init__(mdFile, location)
-#         self.table = table
+class TableSection(BaseSection):
+    """
+    Section to render a table in the markdown file.
+    """
+    def __init__(self, mdFile: MdUtils, location:str, table:List[str], columns:int=3, rows:int=3):
+        super().__init__(mdFile, location)
+        self.table = table
+        self.columns = columns
+        self.rows = rows
 
-#     def render(self, level:int=1, space_above:bool=False, space_below:bool=True):
-#         if space_above:
-#           self.mdFile.new_line()
-#         self.mdFile.new_table(columns=3, rows=3, text=self.table)
-#         if space_below:
-#           self.mdFile.new_line()
+    def render(self, level:int=1, space_above:bool=False, space_below:bool=True):
+        if space_above:
+          self.mdFile.new_line()
+        self.mdFile.new_table(columns=self.columns, rows=self.rows, text=self.table)
+        if space_below:
+          self.mdFile.new_line()
 
-#     def is_valid(self) -> bool:
-#         return True
+    def is_valid(self) -> bool:
+        return True
 
 class ListSection(BaseSection):
     """
