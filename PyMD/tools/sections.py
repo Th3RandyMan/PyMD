@@ -1,7 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional, Union
+from collections import UserDict
+from pathlib import Path
+from typing import Dict, List, Optional, Union
+from matplotlib.figure import Figure
 from mdutils.mdutils import MdUtils
-
+import numpy as np
+from pandas import DataFrame
+from .utils import FIGURE_FOLDER
 
 class BaseSection(ABC):
     """
@@ -27,14 +32,21 @@ class BaseSection(ABC):
         during rendering.
         """
 
-class Section(BaseSection):
+class Section(BaseSection, UserDict):
     """
     Section to hold multiple sections in the markdown file.
     """
-    def __init__(self, mdFile: MdUtils, header:str, location:str):
-        super().__init__(mdFile, location)
+    save_path:Path = None
+    dpi:int = None
+
+    def __init__(self, mdFile: MdUtils, header:str, location:str="", section_headers:Optional[List[str]]=None):
+        UserDict.__init__(self)
+        BaseSection.__init__(self, mdFile, location)
         self.header = header
-        self.sections:dict = {}
+        self.section_headers = section_headers
+        if section_headers is not None:
+            self.section_headers.append(self.get_header_location())
+        # self:dict = {}
         self.text:int = 0
         self.code:int = 0
         self.image:int = 0
@@ -42,6 +54,88 @@ class Section(BaseSection):
         self.list:int = 0
         self.link:int = 0
         self.checkbox:int = 0
+
+    # def __getstate__(self) -> Dict:
+    #     return self.__dict__
+    
+    def _from_json(self, json_dict:Dict):
+        raise NotImplementedError("Not implemented.")
+        """
+        Convert a dictionary to a markdown file.
+
+        Args:
+            json_dict (Dict): Dictionary representation of the markdown file.
+        """
+        for key, value in json_dict.items():
+            if isinstance(value, dict):
+                section = Section(self.mdFile, key, self.get_header_location(), self.section_headers)
+                section._from_json(value)
+                self[key] = section
+
+            elif "text" in key:
+                self[key] = TextSection(self.mdFile, self.get_header_location(), value[key])
+            elif "code" in key:
+                self[key] = CodeSection(self.mdFile, self.get_header_location(), value["code"], value["language"])
+            elif "image_path" in key:
+                self[key] = ImageSection(self.mdFile, self.get_header_location(), value["image_path"], value["caption"])
+            elif "table" in key:
+                self[key] = TableSection(self.mdFile, self.get_header_location(), value["table"], value["columns"], value["rows"])
+            elif "items" in key:
+                self[key] = ListSection(self.mdFile, self.get_header_location(), value["items"])
+            elif "link" in key:
+                self[key] = LinkSection(self.mdFile, self.get_header_location(), value["link"], value["text"])
+            elif "text_list" in key:
+                self[key] = CheckBoxSection(self.mdFile, self.get_header_location(), value["text_list"], value["checked"])
+            else:
+                raise ValueError("Invalid section type.")
+    
+    def _to_json(self) -> Dict:
+        """
+        Convert the markdown file to a normal dictionary.
+
+        Returns:
+            Dict: Dictionary representation of the markdown file.
+        """
+        json_dict = {}
+        for key, value in self.items():
+            json_dict[key] = value._to_json()
+        return json_dict
+
+    def get_section_ptr(self, keys:List[str]) -> BaseSection:
+        ptr = self
+        for k in keys[:-1]:
+            ptr = ptr[k]
+        return ptr, keys[-1]
+
+    def __setitem__(self, key:str, section:BaseSection):
+        if section is not None and isinstance(section, Section) and section.section_headers is None:
+            self.section_headers.append(self.get_header_location())
+
+        if key[0] == "/":
+            key = key[1:]
+        keys = key.split("/")
+        if len(keys) > 1:
+            ptr, new_key = self.get_section_ptr(keys)
+            return ptr.__setitem__(new_key, section)
+        else:
+            return super().__setitem__(key, section)
+    
+    def __getitem__(self, key:str) -> BaseSection:
+        if key[0] == "/":
+            key = key[1:]
+        keys = key.split("/")
+        if len(keys) > 1:
+            ptr, new_key = self.get_section_ptr(keys)
+            return ptr.__getitem__(new_key)
+        else:
+            if key not in self:
+                self[key] = Section(self.mdFile, key, self.get_header_location(), self.section_headers)
+            return super().__getitem__(key)
+    
+    def __delitem__(self, key: str) -> None:     # Need to make this delete all strings with key in it
+        if self.section_headers is not None and key in self.section_headers:
+            self.section_headers.remove(key)
+        return super().__delitem__(key)
 
     def render(self, level:int=1, space_above:bool=False, space_below:bool=True):
         if space_above:
@@ -51,15 +145,24 @@ class Section(BaseSection):
             self.mdFile.new_line()
 
         level += 1
-        for section_name, section in self.sections.items():
+        for section_name, section in self.items():
             section.render(level=level)
     
     def is_valid(self) -> bool:
-        for section_name, section in self.sections:
+        for section_name, section in self:
             if not section.is_valid():
                 return False
         return True
     
+    def get_header_location(self) -> str:
+        """
+        Get the heading of the section.
+
+        Returns:
+            str: Heading of the section.
+        """
+        return self.header if self.location == '' else self.location + '/' + self.header
+
     def get_section_name(self, section:BaseSection) -> str:
         """
         Get the name of the section based on the type of section.
@@ -99,7 +202,7 @@ class Section(BaseSection):
         return name
         
     
-    def add_section(self, heading:Optional[str], section:Optional[BaseSection] = None, section_headers:Optional[List[str]] = None) -> BaseSection:
+    def add_section(self, heading:Optional[str], section:Optional[BaseSection] = None) -> BaseSection:
         """
         Create a new section in the markdown file.
 
@@ -107,7 +210,6 @@ class Section(BaseSection):
             heading (str): Heading of the section.
             section (Optional[BaseSection], optional): Section to add to the markdown file. Defaults to None.
                 - If None, a new Section object is created.
-            section_headers (Optional[List[str]], optional): List to store the headers of the sections. Defaults to None.
 
         Returns:
             bool: True if the section was added successfully, False if the section already exists.
@@ -116,34 +218,148 @@ class Section(BaseSection):
             if section is None:
                 return section
             else:
-                self.sections[self.get_section_name(section)] = section
+                self[self.get_section_name(section)] = section
                 return section
 
         headers = heading.split("/") # Split the heading into subheadings
         head = headers[0]
-        location = self.header if self.location == '' else self.location + '/' + self.header
 
         if len(headers) == 1:  # If there is only one heading left, check if it is this section
-            if head not in self.sections.keys():  # If the section does not exist, create it
-                self.sections[head] = Section(self.mdFile, head, location)
-                if section_headers is not None:
-                    section_headers.append(head)
+            if head not in self.keys():  # If the section does not exist, create it
+                self[head] = Section(self.mdFile, head, self.get_header_location(), self.section_headers)
 
                 if section is not None:
-                    section = self.sections[head].add_section(None, section)
+                    section = self[head].add_section(None, section)
                 else:
-                    section = self.sections[head]
+                    section = self[head]
             elif section is not None:
-                section = self.sections[head].add_section(None, section)
+                section = self[head].add_section(None, section)
         elif len(headers) > 1:
-            if head not in self.sections.keys():  # If the section does not exist, create it
-                self.sections[head] = Section(self.mdFile, head, "")
-                if section_headers is not None:
-                    section_headers.append(head)
+            if head not in self.keys():  # If the section does not exist, create it
+                self[head] = Section(self.mdFile, head, self.get_header_location(), self.section_headers)
 
-            section = self.sections[head].add_section("/".join(headers[1:]), section, section_headers)   # Recursively add the section to the next level
+            section = self[head].add_section("/".join(headers[1:]), section)   # Recursively add the section to the next level
         
         return section
+    
+    def add_text(self, text:str) -> BaseSection:
+        """
+        Add a text section to the markdown file.
+
+        Args:
+            text (str): Text to add to the markdown file.
+
+        Returns:
+            BaseSection: Text section object.
+        """
+        return self.add_section(None, TextSection(self.mdFile, self.get_header_location(), text))
+    
+    def add_code(self, code:str, language:str="python") -> BaseSection:
+        """
+        Add a code section to the markdown file.
+
+        Args:
+            code (str): Code to add to the markdown file.
+            language (str, optional): Language of the code. Defaults to "python".
+
+        Returns:
+            BaseSection: Code section object.
+        """
+        return self.add_section(None, CodeSection(self.mdFile, self.get_header_location(), code, language))
+    
+    def add_image(self, figure:Union[Figure,str], caption:str=None) -> BaseSection:
+        """
+        Add an image section to the markdown file.
+
+        Args:
+            image_path (str): Path to the image file.
+            caption (str, optional): Caption for the image. Defaults to None.
+
+        Returns:
+            BaseSection: Image section object.
+        """
+        if isinstance(figure, Figure):
+            # Save the figure
+            image_path = self.save_path / FIGURE_FOLDER
+            if not image_path.exists():
+                image_path.mkdir()
+            image_path = image_path / f"image{self.image}.png"
+            figure.savefig(str(image_path), dpi=self.dpi)
+            figure = str(image_path)
+
+        return self.add_section(None, ImageSection(self.mdFile, self.get_header_location(), figure, caption))
+    
+    def add_table(self, table:List[str], columns:int=3, rows:int=3) -> BaseSection:
+        """
+        Add a table section to the markdown file.
+
+        Args:
+            table (List[str]): Table data.
+            columns (int, optional): Number of columns in the table. Defaults to 3.
+            rows (int, optional): Number of rows in the table. Defaults to 3.
+
+        Returns:
+            BaseSection: Table section object.
+        """
+        if isinstance(table, DataFrame):
+            rows, columns = table.shape
+            col = table.columns.tolist()
+            rows += 1
+            table = col + [str(x) for x in table.values.flatten().tolist()]
+        elif isinstance(table, np.ndarray):
+            rows, columns = table.shape
+            col = [f"Column {x+1}" for x in range(table.shape[1])]
+            rows += 1
+            table = col + [str(x) for x in table.flatten().tolist()]
+        elif table is None:
+            raise ValueError("Table cannot be None.")
+            
+        # Check if table size is valid
+        if columns is not None and rows is not None:
+            if columns * rows != len(table):
+                raise ValueError("Table size does not match the number of rows and columns.")
+        else:
+            raise ValueError("Number of columns and rows must be specified.")
+
+        return self.add_section(None, TableSection(self.mdFile, self.get_header_location(), table, columns, rows))
+    
+    def add_list(self, items:list) -> BaseSection:
+        """
+        Add a list section to the markdown file.
+
+        Args:
+            items (list): List of items.
+
+        Returns:
+            BaseSection: List section object.
+        """
+        return self.add_section(None, ListSection(self.mdFile, self.get_header_location(), items))
+    
+    def add_link(self, link:str, text:str) -> BaseSection:
+        """
+        Add a link section to the markdown file.
+
+        Args:
+            link (str): Link to add.
+            text (str): Text to display for the link.
+
+        Returns:
+            BaseSection: Link section object.
+        """
+        return self.add_section(None, LinkSection(self.mdFile, self.get_header_location(), link, text))
+    
+    def add_checkbox(self, text_list:List[str], checked:Union[List[bool],bool]=False) -> BaseSection:
+        """
+        Add a checkbox section to the markdown file.
+
+        Args:
+            text_list (List[str]): List of text items.
+            checked (Union[List[bool],bool], optional): List of booleans indicating if the checkbox is checked. Defaults to False.
+
+        Returns:
+            BaseSection: Checkbox section object.
+        """
+        return self.add_section(None, CheckBoxSection(self.mdFile, self.get_header_location(), text_list, checked))
     
 
 class TextSection(BaseSection):
@@ -163,6 +379,11 @@ class TextSection(BaseSection):
 
     def is_valid(self) -> bool:
         return True
+    
+    def _to_json(self) -> Dict:
+        return {
+            "text": self.text
+        }
 
 
 class CodeSection(BaseSection):
@@ -186,6 +407,12 @@ class CodeSection(BaseSection):
             return False
         return True
     
+    def _to_json(self) -> Dict:
+        return {
+            "code": self.code,
+            "language": self.language
+        }
+    
 
 class ImageSection(BaseSection):
     """
@@ -207,6 +434,12 @@ class ImageSection(BaseSection):
     def is_valid(self) -> bool:
         return True
     
+    def _to_json(self) -> Dict:
+        return {
+            "image_path": str(self.image_path),
+            "caption": self.caption
+        }
+    
 
 class TableSection(BaseSection):
     """
@@ -227,6 +460,13 @@ class TableSection(BaseSection):
 
     def is_valid(self) -> bool:
         return True
+    
+    def _to_json(self) -> Dict:
+        return {
+            "table": self.table,
+            "columns": self.columns,
+            "rows": self.rows
+        }
 
 class ListSection(BaseSection):
     """
@@ -246,6 +486,11 @@ class ListSection(BaseSection):
     def is_valid(self) -> bool:
         return True
     
+    def _to_json(self) -> Dict:
+        return {
+            "items": self.items
+        }
+    
 class LinkSection(BaseSection):
     """
     Section to render a link in the markdown file.
@@ -264,6 +509,12 @@ class LinkSection(BaseSection):
 
     def is_valid(self) -> bool:
         return True
+    
+    def _to_json(self) -> Dict:
+        return {
+            "link": self.link,
+            "text": self.text
+        }
     
 class CheckBoxSection(BaseSection):
     """
@@ -289,3 +540,9 @@ class CheckBoxSection(BaseSection):
 
     def is_valid(self) -> bool:
         return True
+    
+    def _to_json(self) -> Dict:
+        return {
+            "text_list": self.text_list,
+            "checked": self.checked
+        }

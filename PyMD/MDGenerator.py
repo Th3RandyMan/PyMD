@@ -6,7 +6,12 @@ To do:
     - Add table section
     - Add author write in
     - Maybe add in deconstructor to save the file?
+
+    - Increment count variables for index assignment (text, code, image, table, list, link, checkbox in Section class).
+    - Have not tested section_headers deletion, and there could be issues with some adding methods.
 """
+from collections import UserDict
+import json
 from matplotlib.figure import Figure
 from mdutils.mdutils import MdUtils
 from pathlib import Path
@@ -14,12 +19,12 @@ from typing import Dict, Optional, Union, List
 
 from pandas import DataFrame
 import numpy as np
-from tools.utils import is_file_type
+from tools.utils import is_file_type, FIGURE_FOLDER
 from tools.sections import *
 
 
 
-class MDGenerator:
+class MDGenerator(UserDict):
     """
     Class to generate a markdown file with images and text.
     """
@@ -31,9 +36,7 @@ class MDGenerator:
     link:int = 0
     checkbox:int = 0
 
-    FIGURE_FOLDER = "figures"
-
-    def __init__(self, save_path: Optional[Union[str,Path]] = None, file_name:str = "GeneratedMD", title:Optional[str] = None, author:Optional[str] = None, dpi:int = 300):
+    def __init__(self, save_path: Optional[Union[str,Path]] = None, file_name:str = "GeneratedMD", title:Optional[str] = None, author:Optional[str] = None, dpi:Optional[int] = None):
         """
         Args:
             save_path (Optional[Union[str,Path]], optional): Path to save the generated file. Defaults to None.
@@ -41,8 +44,10 @@ class MDGenerator:
             file_name (str, optional): Name of the generated file. Defaults to "GeneratedMD".
             title (str, optional): Title of the document. Defaults to None.
             author (str, optional): Author of the document. Defaults to None.
-            dpi (int, optional): DPI of the generated image. Defaults to 300.
+            dpi (int, optional): DPI of the generated image. Defaults to None, figures dpi.
         """
+        super().__init__()
+
         if save_path is None:
             self.save_path = Path.cwd()
         elif isinstance(save_path, str):
@@ -56,6 +61,9 @@ class MDGenerator:
             raise TypeError("save_path must be a str or Path object")
 
         self.save_path.mkdir(parents=True, exist_ok=True)
+        Section.save_path = self.save_path
+
+        self.file_name = file_name
         if title is None:
             self.title = ""
         else:
@@ -64,11 +72,55 @@ class MDGenerator:
             self.author = ""
         else:
             self.author = author
+        
         self.dpi = dpi
+        Section.dpi = self.dpi
         
         self.mdFile = MdUtils(file_name=str(self.save_path / (file_name + ".md")), title=self.title, author=self.author)
-        self.sections:Dict[Section] = {}
+        # self:Dict[Section] = {}
         self.section_headers:List[str] = []
+
+    # def __getstate__(self) -> Dict:
+    #     return self.__dict__
+    
+    # def __setstate__(self, state:Dict) -> None:
+    #     self.__dict__.update(state)
+
+    def get_section_ptr(self, keys:List[str]) -> BaseSection:
+        ptr = self
+        for k in keys[:-1]:
+            ptr = ptr[k]
+        return ptr, keys[-1]
+
+    def __setitem__(self, key:str, section:BaseSection) -> None:
+        if section is not None and isinstance(section, Section) and section.section_headers is None:
+            self.section_headers.append(key)
+
+        if key[0] == "/":
+            key = key[1:]
+        keys = key.split("/")
+        if len(keys) > 1:
+            ptr, new_key = self.get_section_ptr(keys)
+            return ptr.__setitem__(new_key, section)
+        else:
+            return super().__setitem__(key, section)
+    
+    def __getitem__(self, key:str) -> BaseSection:
+        if key[0] == "/":
+            key = key[1:]
+        keys = key.split("/")
+        if len(keys) > 1:
+            ptr, new_key = self.get_section_ptr(keys)
+            return ptr.__getitem__(new_key)
+        else:
+            if key not in self:
+                self[key] = Section(self.mdFile, key, "", self.section_headers)
+            return super().__getitem__(key)
+    
+    def __delitem__(self, key:str) -> None:
+        if key in self.section_headers:     # Need to make this delete all strings with key in it
+            self.section_headers.remove(key)
+        return super().__delitem__(key)
 
     def add_section(self, heading:Optional[str], section:Optional[BaseSection] = None) -> BaseSection:
         """
@@ -94,21 +146,21 @@ class MDGenerator:
         head = headers[0]
 
         if len(headers) == 1:  # If there is only one heading left, check if it is this section
-            if head not in self.sections.keys():  # If the section does not exist, create it
-                self.sections[head] = Section(self.mdFile, head, "")
-                self.section_headers.append(head)
+            if head not in self.keys():  # If the section does not exist, create it
+                self[head] = Section(self.mdFile, head, "", self.section_headers)
+                # self.section_headers.append(head)
                 if section is not None:
-                    section = self.sections[head].add_section(None, section)
+                    section = self[head].add_section(None, section)
                 else:
-                    section = self.sections[head]
+                    section = self[head]
             elif section is not None:
-                section = self.sections[head].add_section(None, section)
+                section = self[head].add_section(None, section)
         elif len(headers) > 1:
-            if head not in self.sections.keys():  # If the section does not exist, create it
-                self.sections[head] = Section(self.mdFile, head, "")
-                self.section_headers.append(head)
+            if head not in self.keys():  # If the section does not exist, create it
+                self[head] = Section(self.mdFile, head, "", self.section_headers)
+                # self.section_headers.append(head)
 
-            section = self.sections[head].add_section("/".join(headers[1:]), section, self.section_headers)   # Recursively add the section to the next level
+            section = self[head].add_section("/".join(headers[1:]), section)   # Recursively add the section to the next level
         
         if type_section and section is not None:    # If given object is a Section object, missed adding the section to the section list
             self.section_headers.append(heading)
@@ -159,7 +211,7 @@ class MDGenerator:
 
         if isinstance(figure, Figure):
             # Save the figure
-            image_path = self.save_path / MDGenerator.FIGURE_FOLDER
+            image_path = self.save_path / FIGURE_FOLDER
             if not image_path.exists():
                 image_path.mkdir()
             image_path = image_path / f"image{self.image}.png"
@@ -305,61 +357,190 @@ class MDGenerator:
             self.checkbox += 1
         return result
     
-    def save(self):
+    def _to_json(self) -> Dict:
+        """
+        Convert the markdown file to a normal dictionary.
+
+        Returns:
+            Dict: Dictionary representation of the markdown file.
+        """
+        json_dict = {}
+
+        # Add settings
+        json_dict["MDG_Settings"] = {
+            "save_path": str(self.save_path),
+            "file_name": self.file_name,
+            "title": self.title,
+            "author": self.author,
+            "dpi": self.dpi,
+            "section_headers": self.section_headers,
+            "text_count": self.text,
+            "code_count": self.code,
+            "image_count": self.image,
+            "table_count": self.table,
+            "list_count": self.list,
+            "link_count": self.link,
+            "checkbox_count": self.checkbox
+        }
+
+        for key, value in self.items():
+            json_dict[key] = value._to_json()
+        return json_dict
+    
+    def load_json(self, file_name:Optional[str] = None) -> None:
+        """
+        Load a json file to create a markdown file.
+
+        Args:
+            file_name (Optional[str], optional): Name of the json file. Defaults to None.
+                - If None, the file is loaded as "GeneratedMD.json".
+        """
+        if file_name is not None:
+            if len(file_name.split("/")) > 1:
+                save_path = Path("/".join(file_name.split("/")[:-1]))
+                file_name = file_name.split("/")[-1]
+            else:
+                save_path = self.save_path
+
+            if file_name.split(".")[-1] == "json":
+                file_name = ".".join(file_name.split(".")[:-1])
+        else:
+            save_path = self.save_path
+            file_name = self.file_name
+
+        with open(str(save_path / (file_name + ".json")), "r") as f:
+            json_dict = json.load(f)
+        
+        self.save_path = Path(json_dict["MDG_Settings"]["save_path"])
+        self.file_name = json_dict["MDG_Settings"]["file_name"]
+        self.title = json_dict["MDG_Settings"]["title"]
+        self.author = json_dict["MDG_Settings"]["author"]
+        self.dpi = json_dict["MDG_Settings"]["dpi"]
+        self.section_headers = json_dict["MDG_Settings"]["section_headers"]
+        self.text = json_dict["MDG_Settings"]["text_count"]
+        self.code = json_dict["MDG_Settings"]["code_count"]
+        self.image = json_dict["MDG_Settings"]["image_count"]
+        self.table = json_dict["MDG_Settings"]["table_count"]
+        self.list = json_dict["MDG_Settings"]["list_count"]
+        self.link = json_dict["MDG_Settings"]["link_count"]
+        self.checkbox = json_dict["MDG_Settings"]["checkbox_count"]
+
+        self.mdFile = MdUtils(file_name=str(self.save_path / (self.file_name + ".md")), title=self.title, author=self.author)
+        for key, value in json_dict.items():
+            if key != "MDG_Settings":
+                # self[key] = Section(self.mdFile, key, "", self.section_headers)
+                self[key]._from_json(value)
+
+
+    def save_json(self, file_name:Optional[str] = None) -> None:
+        """
+        Save the markdown file as a json file.
+
+        Args:
+            file_name (Optional[str], optional): Name of the json file. Defaults to None.
+                - If None, the file is saved as "GeneratedMD.json".
+        """
+        if file_name is not None:
+            if len(file_name.split("/")) > 1:
+                save_path = Path("/".join(file_name.split("/")[:-1]))
+                file_name = file_name.split("/")[-1]
+            else:
+                save_path = self.save_path
+
+            if file_name.split(".")[-1] == "json":
+                file_name = ".".join(file_name.split(".")[:-1])
+        else:
+            save_path = self.save_path
+            file_name = self.file_name
+
+        with open(str(save_path / (file_name + ".json")), "w") as f:
+            json.dump(self._to_json(), f, indent=4)
+    
+    def save(self, file_name:Optional[str] = None) -> None:
         """
         Save the markdown file.
+
         """
-        for section in self.sections.values():
+        if file_name is not None:
+            if len(file_name.split("/")) > 1:
+                self.save_path = Path("/".join(file_name.split("/")[:-1]))
+                self.file_name = file_name.split("/")[-1]
+            if file_name.split(".")[-1] == "md":
+                self.file_name = ".".join(file_name.split(".")[:-1])
+
+            self.mdFile.file_name = str(self.save_path / (self.file_name + ".md"))
+
+        for section in self.values():
             section.render()
         self.mdFile.create_md_file()
     
 
 if __name__ == "__main__":
-    mdGen = MDGenerator("example", title="Generated Markdown", author="Author")
-    mdGen.add_text("Section 1", "This is the first section.")
-    mdGen.add_text("Section 2", "This is the second section.")
-    mdGen.add_code("Section 2", "print('Hello, World!')")
-    mdGen.add_text("Section 1/Subsection 1", "This is a subsection of the first section.")
-    mdGen.add_text("Section 1/Subsection 2", "This is a subsection of the first section.")
-    mdGen.add_text("Section 1/Subsection 2/Subsubsection 1", "This is a subsubsection of the second subsection.")
-
-    import matplotlib.pyplot as plt
-    import numpy as np
-
-    # Generate random data
-    x = np.linspace(0, 10, 100)
-    y = np.random.randn(100)
-
-    # Create a figure and plot the data
-    fig, ax = plt.subplots()
-    ax.plot(x, y)
-
-    # Add labels and title
-    ax.set_xlabel('X-axis')
-    ax.set_ylabel('Y-axis')
-    ax.set_title('Random Figure')
-
-    # Add the image to the markdown file
-    mdGen.add_image("Section 1", fig, "This is a random figure.")
-
-    # Add a list to the markdown file
-    mdGen.add_list("Section 2", ["Item 1", "Item 2", "Item 3"])
-
-    # Add a link to the markdown file
-    mdGen.add_link("Section 2", "https://www.google.com", "Google")
-
-    # Add a checkbox list to the markdown file
-    mdGen.add_checkbox("Section 2", ["Check 1", "Check 2", "Check 3"], [True, False, True])
-
-    # Add a table to the markdown file
-    headers = ["Header 1", "Header 2", "Header 3", "Header 4"]
-    table = np.random.randint(0, 10, (6, 4))
-    df = DataFrame(table, columns=headers)
-
-    list_table = ["Header 1", "Header 2", "Header 3"] + [str(3*i + j) for i in range(3) for j in range(3)]
-    mdGen.add_table("Section 3/Numpy Array Table", table)
-    mdGen.add_table("Section 3/Python List Table", list_table, 3, 4)
-    mdGen.add_table("Section 3/Pandas DataFrame Table", df)
-
-    # Save the markdown file
+    mdGen = MDGenerator()
+    mdGen.load_json("example/GeneratedMD.json")
     mdGen.save()
+
+    # mdGen = MDGenerator("example", title="Generated Markdown", author="Author")
+    # mdGen.add_text("Section 1", "This is the first section.")
+    # #mdGen["Section 1"].add_text("This is a subsection of the first section.")
+    # # mdGen.add_text("Section 2", "This is the second section.")
+    # mdGen["Section 2"].add_text("This is a subsection of the second section.")
+    # # mdGen.add_code("Section 2", "print('Hello, World!')")
+    # mdGen["Section 2"].add_code("print('This is a subsection of the second section.')")
+    # # mdGen.add_text("Section 1/Subsection 1", "This is a subsection of the first section.")
+    # mdGen["Section 1"]["Subsection 1"].add_text("This is a subsection of the first section.")
+    # # mdGen.add_text("Section 1/Subsection 2", "This is a subsection of the first section.")
+    # mdGen["Section 1"]["Subsection 2"].add_text("This is a subsection of the first section.")
+    # mdGen["Section 1/Subsection 2"].add_text("Specifically, this is the second subsection of the first subsection.")
+
+    # # mdGen.add_text("Section 1/Subsection 2/Subsubsection 1", "This is a subsubsection of the second subsection.")
+    # mdGen["Section 1"]["Subsection 2"]["Subsubsection 1"].add_text("This is a subsubsection of the second subsection.")
+
+    # import matplotlib.pyplot as plt
+    # import numpy as np
+
+    # # Generate random data
+    # x = np.linspace(0, 10, 100)
+    # y = np.random.randn(100)
+
+    # # Create a figure and plot the data
+    # fig, ax = plt.subplots()
+    # ax.plot(x, y)
+
+    # # Add labels and title
+    # ax.set_xlabel('X-axis')
+    # ax.set_ylabel('Y-axis')
+    # ax.set_title('Random Figure')
+
+    # # Add the image to the markdown file
+    # # mdGen.add_image("Section 1", fig, "This is a random figure.")
+    # mdGen["Section 1"].add_image(fig, "This is a random figure.")
+
+    # # Add a list to the markdown file
+    # # mdGen.add_list("Section 2", ["Item 1", "Item 2", "Item 3"])
+    # mdGen["Section 2"].add_list(["Item 1", "Item 2", "Item 3"])
+
+    # # Add a link to the markdown file
+    # # mdGen.add_link("Section 2", "https://www.google.com", "Google")
+    # mdGen["Section 2"].add_link("https://www.google.com", "Google")
+
+    # # Add a checkbox list to the markdown file
+    # # mdGen.add_checkbox("Section 2", ["Check 1", "Check 2", "Check 3"], [True, False, True])
+    # mdGen["Section 2"].add_checkbox(["Check 1", "Check 2", "Check 3"], [True, False, True])
+
+    # # Add a table to the markdown file
+    # headers = ["Header 1", "Header 2", "Header 3", "Header 4"]
+    # table = np.random.randint(0, 10, (6, 4))
+    # df = DataFrame(table, columns=headers)
+
+    # list_table = ["Header 1", "Header 2", "Header 3"] + [str(3*i + j) for i in range(3) for j in range(3)]
+    # # mdGen.add_table("Section 3/Numpy Array Table", table)
+    # mdGen["Section 3"]["Numpy Array Table"].add_table(table)
+    # # mdGen.add_table("Section 3/Python List Table", list_table, 3, 4)
+    # mdGen["Section 3"]["Python List Table"].add_table(list_table, 3, 4)
+    # # mdGen.add_table("Section 3/Pandas DataFrame Table", df)
+    # mdGen["Section 3"]["Pandas DataFrame Table"].add_table(df)
+
+    # # Save the markdown file
+    # mdGen.save_json()
+    # mdGen.save()

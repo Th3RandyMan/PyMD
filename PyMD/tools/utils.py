@@ -2,7 +2,7 @@
 from typing import List
 
 FILE_TYPES = [".md", ".markdown"]
-
+FIGURE_FOLDER = "figures"
 
 def is_file_type(file_name: str, file_types: List[str] = FILE_TYPES) -> bool:
     """
