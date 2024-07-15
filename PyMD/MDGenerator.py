@@ -16,8 +16,8 @@ from typing import Dict, Optional, Union, List
 
 from pandas import DataFrame
 import numpy as np
-from tools.utils import is_file_type, FIGURE_FOLDER
-from tools.sections import *
+from .tools.utils import is_file_type, FIGURE_FOLDER
+from .tools.sections import *
 
 
 
