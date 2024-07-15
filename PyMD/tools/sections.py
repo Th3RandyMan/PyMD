@@ -110,7 +110,7 @@ class Section(BaseSection, UserDict):
             ptr = ptr[k]
         return ptr, keys[-1]
 
-    def __setitem__(self, key:str, section:BaseSection):
+    def __setitem__(self, key:str, section:Union[BaseSection, str, DataFrame, np.ndarray, Figure]):
         if section is not None and isinstance(section, Section) and section.section_headers is None:
             self.section_headers.append(self.get_header_location())
 
@@ -121,7 +121,18 @@ class Section(BaseSection, UserDict):
             ptr, new_key = self.get_section_ptr(keys)
             return ptr.__setitem__(new_key, section)
         else:
-            return super().__setitem__(key, section)
+            if isinstance(section, BaseSection):
+                return super().__setitem__(key, section)
+            elif isinstance(section, str):
+                self.add_text(section)
+            elif isinstance(section, DataFrame):
+                self.add_table(section)
+            elif isinstance(section, np.ndarray):
+                self.add_table(section)
+            elif isinstance(section, Figure):
+                self.add_image(section)
+            else:
+                raise ValueError("Invalid section type.")
     
     def __getitem__(self, key:str) -> BaseSection:
         if key[0] == "/":

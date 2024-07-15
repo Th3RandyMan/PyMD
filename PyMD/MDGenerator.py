@@ -96,7 +96,7 @@ class MDGenerator(UserDict):
             ptr = ptr[k]
         return ptr, keys[-1]
 
-    def __setitem__(self, key:str, section:BaseSection) -> None:
+    def __setitem__(self, key:str, section:Union[BaseSection, str, DataFrame, np.ndarray, Figure]) -> None:
         if section is not None and isinstance(section, Section) and section.section_headers is None:
             self.section_headers.append(key)
 
@@ -107,7 +107,18 @@ class MDGenerator(UserDict):
             ptr, new_key = self.get_section_ptr(keys)
             return ptr.__setitem__(new_key, section)
         else:
-            return super().__setitem__(key, section)
+            if isinstance(section, BaseSection):
+                return super().__setitem__(key, section)
+            elif isinstance(section, str):
+                self.add_text(None, section)
+            elif isinstance(section, DataFrame):
+                self.add_table(None, section)
+            elif isinstance(section, np.ndarray):
+                self.add_table(None, section)
+            elif isinstance(section, Figure):
+                self.add_image(None, section)
+            else:
+                raise ValueError("Invalid section type.")
     
     def __getitem__(self, key:str) -> BaseSection:
         if key[0] == "/":
@@ -526,72 +537,74 @@ class MDGenerator(UserDict):
         self.mdFile.create_md_file()
     
 
-if __name__ == "__main__":
-    # mdGen = MDGenerator()
-    # mdGen.load_json("example/GeneratedMD.json")
-    # mdGen.save()
+# if __name__ == "__main__":
+#     # mdGen = MDGenerator()
+#     # mdGen.load_json("example/GeneratedMD.json")
+#     # mdGen.save()
 
-    mdGen = MDGenerator("example", title="Generated Markdown", author="Author")
-    mdGen.add_text("Section 1", "This is the first section.")
-    #mdGen["Section 1"].add_text("This is a subsection of the first section.")
-    # mdGen.add_text("Section 2", "This is the second section.")
-    mdGen["Section 2"].add_text("This is a subsection of the second section.")
-    # mdGen.add_code("Section 2", "print('Hello, World!')")
-    mdGen["Section 2"].add_code("print('This is a subsection of the second section.')")
-    # mdGen.add_text("Section 1/Subsection 1", "This is a subsection of the first section.")
-    mdGen["Section 1"]["Subsection 1"].add_text("This is a subsection of the first section.")
-    # mdGen.add_text("Section 1/Subsection 2", "This is a subsection of the first section.")
-    mdGen["Section 1"]["Subsection 2"].add_text("This is a subsection of the first section.")
-    mdGen["Section 1/Subsection 2"].add_text("Specifically, this is the second subsection of the first subsection.")
+#     mdGen = MDGenerator("example", title="Generated Markdown", author="Author")
+#     mdGen.add_text("Section 1", "This is the first section.")
+#     #mdGen["Section 1"].add_text("This is a subsection of the first section.")
+#     # mdGen.add_text("Section 2", "This is the second section.")
+#     mdGen["Section 2"].add_text("This is a subsection of the second section.")
+#     # mdGen.add_code("Section 2", "print('Hello, World!')")
+#     mdGen["Section 2"].add_code("print('This is a subsection of the second section.')")
+#     # mdGen.add_text("Section 1/Subsection 1", "This is a subsection of the first section.")
+#     mdGen["Section 1"]["Subsection 1"].add_text("This is a subsection of the first section.")
+#     # mdGen.add_text("Section 1/Subsection 2", "This is a subsection of the first section.")
+#     mdGen["Section 1"]["Subsection 2"].add_text("This is a subsection of the first section.")
+#     mdGen["Section 1/Subsection 2"].add_text("Specifically, this is the second subsection of the first subsection.")
 
-    # mdGen.add_text("Section 1/Subsection 2/Subsubsection 1", "This is a subsubsection of the second subsection.")
-    mdGen["Section 1"]["Subsection 2"]["Subsubsection 1"].add_text("This is a subsubsection of the second subsection.")
+#     # mdGen.add_text("Section 1/Subsection 2/Subsubsection 1", "This is a subsubsection of the second subsection.")
+#     mdGen["Section 1"]["Subsection 2"]["Subsubsection 1"].add_text("This is a subsubsection of the second subsection.")
 
-    import matplotlib.pyplot as plt
-    import numpy as np
+#     mdGen["Section 1"] = "Hello"
 
-    # Generate random data
-    x = np.linspace(0, 10, 100)
-    y = np.random.randn(100)
+#     import matplotlib.pyplot as plt
+#     import numpy as np
 
-    # Create a figure and plot the data
-    fig, ax = plt.subplots()
-    ax.plot(x, y)
+#     # Generate random data
+#     x = np.linspace(0, 10, 100)
+#     y = np.random.randn(100)
 
-    # Add labels and title
-    ax.set_xlabel('X-axis')
-    ax.set_ylabel('Y-axis')
-    ax.set_title('Random Figure')
+#     # Create a figure and plot the data
+#     fig, ax = plt.subplots()
+#     ax.plot(x, y)
 
-    # Add the image to the markdown file
-    # mdGen.add_image("Section 1", fig, "This is a random figure.")
-    mdGen["Section 1"].add_image(fig, "This is a random figure.")
+#     # Add labels and title
+#     ax.set_xlabel('X-axis')
+#     ax.set_ylabel('Y-axis')
+#     ax.set_title('Random Figure')
 
-    # Add a list to the markdown file
-    # mdGen.add_list("Section 2", ["Item 1", "Item 2", "Item 3"])
-    mdGen["Section 2"].add_list(["Item 1", "Item 2", "Item 3"])
+#     # Add the image to the markdown file
+#     # mdGen.add_image("Section 1", fig, "This is a random figure.")
+#     mdGen["Section 1"].add_image(fig, "This is a random figure.")
 
-    # Add a link to the markdown file
-    # mdGen.add_link("Section 2", "https://www.google.com", "Google")
-    mdGen["Section 2"].add_link("https://www.google.com", "Google")
+#     # Add a list to the markdown file
+#     # mdGen.add_list("Section 2", ["Item 1", "Item 2", "Item 3"])
+#     mdGen["Section 2"].add_list(["Item 1", "Item 2", "Item 3"])
 
-    # Add a checkbox list to the markdown file
-    # mdGen.add_checkbox("Section 2", ["Check 1", "Check 2", "Check 3"], [True, False, True])
-    mdGen["Section 2"].add_checkbox(["Check 1", "Check 2", "Check 3"], [True, False, True])
+#     # Add a link to the markdown file
+#     # mdGen.add_link("Section 2", "https://www.google.com", "Google")
+#     mdGen["Section 2"].add_link("https://www.google.com", "Google")
 
-    # Add a table to the markdown file
-    headers = ["Header 1", "Header 2", "Header 3", "Header 4"]
-    table = np.random.randint(0, 10, (6, 4))
-    df = DataFrame(table, columns=headers)
+#     # Add a checkbox list to the markdown file
+#     # mdGen.add_checkbox("Section 2", ["Check 1", "Check 2", "Check 3"], [True, False, True])
+#     mdGen["Section 2"].add_checkbox(["Check 1", "Check 2", "Check 3"], [True, False, True])
 
-    list_table = ["Header 1", "Header 2", "Header 3"] + [str(3*i + j) for i in range(3) for j in range(3)]
-    # mdGen.add_table("Section 3/Numpy Array Table", table)
-    mdGen["Section 3"]["Numpy Array Table"].add_table(table)
-    # mdGen.add_table("Section 3/Python List Table", list_table, 3, 4)
-    mdGen["Section 3"]["Python List Table"].add_table(list_table, 3, 4)
-    # mdGen.add_table("Section 3/Pandas DataFrame Table", df)
-    mdGen["Section 3"]["Pandas DataFrame Table"].add_table(df)
+#     # Add a table to the markdown file
+#     headers = ["Header 1", "Header 2", "Header 3", "Header 4"]
+#     table = np.random.randint(0, 10, (6, 4))
+#     df = DataFrame(table, columns=headers)
 
-    # Save the markdown file
-    mdGen.save_json()
-    mdGen.save()
+#     list_table = ["Header 1", "Header 2", "Header 3"] + [str(3*i + j) for i in range(3) for j in range(3)]
+#     # mdGen.add_table("Section 3/Numpy Array Table", table)
+#     mdGen["Section 3"]["Numpy Array Table"].add_table(table)
+#     # mdGen.add_table("Section 3/Python List Table", list_table, 3, 4)
+#     mdGen["Section 3"]["Python List Table"].add_table(list_table, 3, 4)
+#     # mdGen.add_table("Section 3/Pandas DataFrame Table", df)
+#     mdGen["Section 3"]["Pandas DataFrame Table"].add_table(df)
+
+#     # Save the markdown file
+#     mdGen.save_json()
+#     mdGen.save()
