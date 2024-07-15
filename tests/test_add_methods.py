@@ -1,10 +1,11 @@
+from time import sleep
 import unittest
 from PyMD.MDGenerator import MDGenerator
 
 
 class AddingRandomStuff(unittest.TestCase):
     def setup(self):
-        mdGen = MDGenerator("/home/rlfowler/Documents/myprojects/PyMD/example", title="Generated Markdown", author="Author")
+        mdGen = MDGenerator("/home/rlfowler/Documents/myprojects/PyMD/example", file_name='GeneratedMD', title="Generated Markdown", author="Author")
         mdGen.add_text("Section 1", "This is the first section.")
         mdGen.add_text("Section 2", "This is the second section.")
         mdGen.add_code("Section 2", "print('Hello, World!')")
@@ -42,9 +43,10 @@ class AddingRandomStuff(unittest.TestCase):
 
         # Save the markdown file
         mdGen.save()
+        sleep(1)
 
     def test_add_text(self):
-        with open("/home/rlfowler/Documents/myprojects/PyMD/example/Generated Markdown.md", "r") as file:
+        with open("/home/rlfowler/Documents/myprojects/PyMD/example/GeneratedMD.md", "r") as file:
             data = file.read()
             self.assertIn("This is the first section.", data)
             self.assertIn("This is the second section.", data)
@@ -53,27 +55,27 @@ class AddingRandomStuff(unittest.TestCase):
             self.assertIn("This is a subsubsection of the second subsection.", data)
 
     def test_add_code(self):
-        with open("/home/rlfowler/Documents/myprojects/PyMD/example/Generated Markdown.md", "r") as file:
+        with open("/home/rlfowler/Documents/myprojects/PyMD/example/GeneratedMD.md", "r") as file:
             data = file.read()
             self.assertIn("```python\nprint('Hello, World!')\n```", data)
 
     def test_add_image(self):
-        with open("/home/rlfowler/Documents/myprojects/PyMD/example/Generated Markdown.md", "r") as file:
+        with open("/home/rlfowler/Documents/myprojects/PyMD/example/GeneratedMD.md", "r") as file:
             data = file.read()
             self.assertIn("This is a random figure.", data)
 
     def test_add_list(self):
-        with open("/home/rlfowler/Documents/myprojects/PyMD/example/Generated Markdown.md", "r") as file:
+        with open("/home/rlfowler/Documents/myprojects/PyMD/example/GeneratedMD.md", "r") as file:
             data = file.read()
             self.assertIn("- Item 1\n- Item 2\n- Item 3", data)
 
     def test_add_link(self):
-        with open("/home/rlfowler/Documents/myprojects/PyMD/example/Generated Markdown.md", "r") as file:
+        with open("/home/rlfowler/Documents/myprojects/PyMD/example/GeneratedMD.md", "r") as file:
             data = file.read()
             self.assertIn("[Google](https://www.google.com)", data)
 
     def test_add_checkbox(self):
-        with open("/home/rlfowler/Documents/myprojects/PyMD/example/Generated Markdown.md", "r") as file:
+        with open("/home/rlfowler/Documents/myprojects/PyMD/example/GeneratedMD.md", "r") as file:
             data = file.read()
             self.assertIn("- [x] Check 1\n- [ ] Check 2\n- [x] Check 3", data)
 

@@ -58,36 +58,39 @@ class Section(BaseSection, UserDict):
     # def __getstate__(self) -> Dict:
     #     return self.__dict__
     
-    def _from_json(self, json_dict:Dict):
-        raise NotImplementedError("Not implemented.")
+    def _from_json(self, json_dict:Dict) -> None:
         """
         Convert a dictionary to a markdown file.
 
         Args:
             json_dict (Dict): Dictionary representation of the markdown file.
         """
-        for key, value in json_dict.items():
-            if isinstance(value, dict):
-                section = Section(self.mdFile, key, self.get_header_location(), self.section_headers)
-                section._from_json(value)
-                self[key] = section
+        location = self.get_header_location()
+        relative_headers = [x.replace(location + "/", "") for x in self.section_headers if x.startswith(location + "/")]
 
-            elif "text" in key:
-                self[key] = TextSection(self.mdFile, self.get_header_location(), value[key])
-            elif "code" in key:
-                self[key] = CodeSection(self.mdFile, self.get_header_location(), value["code"], value["language"])
-            elif "image_path" in key:
-                self[key] = ImageSection(self.mdFile, self.get_header_location(), value["image_path"], value["caption"])
-            elif "table" in key:
-                self[key] = TableSection(self.mdFile, self.get_header_location(), value["table"], value["columns"], value["rows"])
-            elif "items" in key:
-                self[key] = ListSection(self.mdFile, self.get_header_location(), value["items"])
-            elif "link" in key:
-                self[key] = LinkSection(self.mdFile, self.get_header_location(), value["link"], value["text"])
-            elif "text_list" in key:
-                self[key] = CheckBoxSection(self.mdFile, self.get_header_location(), value["text_list"], value["checked"])
+        for key, value in json_dict.items():
+            if key in relative_headers:
+                self[key]._from_json(value)
             else:
-                raise ValueError("Invalid section type.")
+                if isinstance(value, dict):
+                    value_type = list(value.keys())[0]
+                    if value_type == "text":
+                        self.add_text(value["text"])
+                    elif value_type == "code":
+                        self.add_code(value["code"], value["language"])
+                    elif value_type == "image":
+                        self.add_image(value["image"], value["caption"])
+                    elif value_type == "table":
+                        self.add_table(value["table"], value["columns"], value["rows"])
+                    elif value_type == "list":
+                        self.add_list(value["list"])
+                    elif value_type == "link":
+                        self.add_link(value["link"], value["text"])
+                    elif value_type == "checkbox":
+                        self.add_checkbox("", value["text_list"], value["checked"])
+                else:
+                    raise ValueError(f"Value for key {key} is not a dictionary.")
+
     
     def _to_json(self) -> Dict:
         """
@@ -136,6 +139,7 @@ class Section(BaseSection, UserDict):
         if self.section_headers is not None and key in self.section_headers:
             self.section_headers.remove(key)
         return super().__delitem__(key)
+    ### FIX THIS -> MAYBE ADD IN self.get_header_location() instead of key? Or self.get_header_location() + key
 
     def render(self, level:int=1, space_above:bool=False, space_below:bool=True):
         if space_above:
