@@ -542,7 +542,7 @@ class ImageSection(BaseSection):
     """
     Section to render an image in the markdown file.
     """
-    def __init__(self, mdFile: MdUtils, location:str, image_path:str, caption:str=None):
+    def __init__(self, mdFile: MdUtils, location:str, image_path:Union[str,Path], caption:Optional[str]=None):
         """
         Image section to render an image in the markdown file.
 
@@ -553,13 +553,14 @@ class ImageSection(BaseSection):
             caption (str, optional): Caption for the image. Defaults to None.
         """
         super().__init__(mdFile, location)
-        self.image_path = image_path
-        self.caption = caption
+        self.image_path:Path = image_path if isinstance(image_path, Path) else Path(image_path)
+        self.caption = caption if caption is not None else ""
 
     def render(self, level:int=1, space_above:bool=False, space_below:bool=True):
         if space_above:
             self.mdFile.new_line()
-        self.mdFile.new_line(self.mdFile.new_inline_image(text=self.caption, path=str(self.image_path)))
+        image_path = self.image_path.resolve().relative_to(Path(self.mdFile.file_name).resolve().parent)
+        self.mdFile.new_line(self.mdFile.new_inline_image(text=self.caption, path=str(image_path)))
         #self.mdFile.new_line(text=rf"![{self.caption}]({str(self.image_path)})")
         if space_below:
             self.mdFile.new_line()
