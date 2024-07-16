@@ -1,7 +1,7 @@
 from time import sleep
 import unittest
 
-from PyMD.MDGenerator import MDGenerator
+from PyMD import MDGenerator
 from pandas import DataFrame
 
 

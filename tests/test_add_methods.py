@@ -2,7 +2,7 @@ from time import sleep
 import unittest
 
 from pandas import DataFrame
-from PyMD.MDGenerator import MDGenerator
+from PyMD import MDGenerator
 
 
 class AddingRandomStuff(unittest.TestCase):

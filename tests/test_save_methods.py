@@ -1,7 +1,7 @@
 import unittest
 
 from pandas import DataFrame
-from PyMD.MDGenerator import MDGenerator
+from PyMD import MDGenerator
 
 
 class SavingFiles(unittest.TestCase):
@@ -122,7 +122,7 @@ class SavingFiles(unittest.TestCase):
 
         self.assertListEqual(self.mdGen.section_headers, mdGen.section_headers)
         self.assertDictEqual(self.mdGen.section_type_count, mdGen.section_type_count)
-        
+
 
 if __name__ == "__main__":
     unittest.main()

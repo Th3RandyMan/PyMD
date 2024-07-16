@@ -63,6 +63,14 @@ class Section(BaseSection, UserDict):
     section_type_count:Dict[SectionType,int] = None
 
     def __init__(self, mdFile: MdUtils, header:Optional[str] = None, location:Optional[str] = None):
+        """
+        Section to hold multiple sections in the markdown file.
+
+        Args:
+            mdFile (MdUtils): Markdown file object to render the sections.
+            header (Optional[str], optional): Heading of the section. Defaults to None.
+            location (Optional[str], optional): Location of the section. Defaults to None.
+        """
         UserDict.__init__(self)
         BaseSection.__init__(self, mdFile, location)
         self.header = header
@@ -76,9 +84,6 @@ class Section(BaseSection, UserDict):
         self.list:int = 0
         self.link:int = 0
         self.checkbox:int = 0
-
-    # def __getstate__(self) -> Dict:
-    #     return self.__dict__
     
     def _from_json(self, json_dict:Dict) -> None:
         """
@@ -172,7 +177,6 @@ class Section(BaseSection, UserDict):
         if self.section_headers is not None and key in self.section_headers:
             self.section_headers.remove(key)
         return super().__delitem__(key)
-    ### FIX THIS -> MAYBE ADD IN self.get_header_location() instead of key? Or self.get_header_location() + key
     
     def get_header_location(self) -> str:
         """
@@ -397,7 +401,7 @@ class Section(BaseSection, UserDict):
             self.section_type_count[SectionType.TABLE] += 1
         return section
     
-    def add_list(self, items:list) -> BaseSection:
+    def add_list(self, items:list, marked_with:str="-") -> BaseSection:
         """
         Add a list section to the markdown file.
 
@@ -407,13 +411,13 @@ class Section(BaseSection, UserDict):
         Returns:
             BaseSection: List section object.
         """
-        count = self.add_section(None, ListSection(self.mdFile, self.get_header_location(), items))
+        count = self.add_section(None, ListSection(self.mdFile, self.get_header_location(), items, marked_with))
         if count is not None:
             self.list += 1
             self.section_type_count[SectionType.LIST] += 1
         return count
     
-    def add_link(self, link:str, text:str) -> BaseSection:
+    def add_link(self, link:str, text:Optional[str]) -> BaseSection:
         """
         Add a link section to the markdown file.
 
@@ -470,6 +474,14 @@ class TextSection(BaseSection):
     Section to render text in the markdown file.
     """
     def __init__(self, mdFile: MdUtils, location:str, text:str):
+        """
+        Text section to render text in the markdown file.
+
+        Args:
+            mdFile (MdUtils): Markdown file object to render the text.
+            location (str): Location of the text in the markdown file.
+            text (str): Text to render in the markdown file.
+        """
         super().__init__(mdFile, location)
         self.text = text
 
@@ -493,7 +505,16 @@ class CodeSection(BaseSection):
     """
     Section to render code in the markdown file.
     """
-    def __init__(self, mdFile: MdUtils, location:str, code:str, language:str=""):
+    def __init__(self, mdFile: MdUtils, location:str, code:str, language:str="python"):
+        """
+        Code section to render code in the markdown file.
+
+        Args:
+            mdFile (MdUtils): Markdown file object to render the code.
+            location (str): Location of the code in the markdown file.
+            code (str): Code to render in the markdown file.
+            language (str, optional): Language of the code. Defaults to "python".
+        """
         super().__init__(mdFile, location)
         self.code = code
         self.language = language
@@ -522,6 +543,15 @@ class ImageSection(BaseSection):
     Section to render an image in the markdown file.
     """
     def __init__(self, mdFile: MdUtils, location:str, image_path:str, caption:str=None):
+        """
+        Image section to render an image in the markdown file.
+
+        Args:
+            mdFile (MdUtils): Markdown file object to render the image.
+            location (str): Location of the image in the markdown file.
+            image_path (str): Path to the image file.
+            caption (str, optional): Caption for the image. Defaults to None.
+        """
         super().__init__(mdFile, location)
         self.image_path = image_path
         self.caption = caption
@@ -549,6 +579,16 @@ class TableSection(BaseSection):
     Section to render a table in the markdown file.
     """
     def __init__(self, mdFile: MdUtils, location:str, table:List[str], columns:int=3, rows:int=3):
+        """
+        Table section to render a table in the markdown file.
+
+        Args:
+            mdFile (MdUtils): Markdown file object to render the table.
+            location (str): Location of the table in the markdown file.
+            table (List[str]): Table data.
+            columns (int, optional): Number of columns in the table. Defaults to 3.
+            rows (int, optional): Number of rows in the table. Defaults to 3.
+        """
         super().__init__(mdFile, location)
         self.table = table
         self.columns = columns
@@ -575,14 +615,23 @@ class ListSection(BaseSection):
     """
     Section to render a list in the markdown file.
     """
-    def __init__(self, mdFile: MdUtils, location:str, items:list):
+    def __init__(self, mdFile: MdUtils, location:str, items:list, marked_with:str="-"):
+        """
+        List section to render a list in the markdown file.
+
+        Args:
+            mdFile (MdUtils): Markdown file object to render the list.
+            location (str): Location of the list in the markdown file.
+            items (list): List of items.
+        """
         super().__init__(mdFile, location)
         self.items = items
+        self.marked_with = marked_with
 
     def render(self, level:int=1, space_above:bool=False, space_below:bool=True):
         if space_above:
             self.mdFile.new_line()
-        self.mdFile.new_list(items=self.items)
+        self.mdFile.new_list(items=self.items, marked_with=self.marked_with)
         if space_below:
             self.mdFile.new_line()
 
@@ -598,10 +647,22 @@ class LinkSection(BaseSection):
     """
     Section to render a link in the markdown file.
     """
-    def __init__(self, mdFile: MdUtils, location:str, link:str, text:str):
+    def __init__(self, mdFile: MdUtils, location:str, link:str, text:Optional[str]):
+        """
+        Link section to render a link in the markdown file.
+
+        Args:
+            mdFile (MdUtils): Markdown file object to render the link.
+            location (str): Location of the link in the markdown file.
+            link (str): Link to add.
+            text (str): Text to display for the link.
+        """
         super().__init__(mdFile, location)
         self.link = link
-        self.text = text
+        if text is None:
+            self.text = link
+        else:
+            self.text = text
 
     def render(self, level:int=1, space_above:bool=False, space_below:bool=True):
         if space_above:
@@ -624,6 +685,15 @@ class CheckBoxSection(BaseSection):
     Section to render a checkbox in the markdown file.
     """
     def __init__(self, mdFile: MdUtils, location:str, text_list:List[str], checked:Union[List[bool],bool]=False):
+        """
+        Checkbox section to render a checkbox in the markdown file.
+
+        Args:
+            mdFile (MdUtils): Markdown file object to render the checkbox.
+            location (str): Location of the checkbox in the markdown file.
+            text_list (List[str]): List of text items.
+            checked (Union[List[bool],bool], optional): List of booleans indicating if the checkbox is checked. Defaults to False.
+        """
         super().__init__(mdFile, location)
         self.text_list = text_list
         if isinstance(checked, bool):

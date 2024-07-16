@@ -1,12 +1,13 @@
-from collections import UserDict
+"""
+To do:
+    - Add subsections to list
+    - Add section links/references
+"""
 import json
 from matplotlib.figure import Figure
 from mdutils.mdutils import MdUtils
 from pathlib import Path
 from typing import Dict, Optional, Union, List
-
-from pandas import DataFrame
-import numpy as np
 from .tools.utils import is_file_type, FIGURE_FOLDER
 from .tools.sections import *
 
@@ -15,11 +16,12 @@ class MDGenerator(Section):
     """
     Markdown Generator class to generate markdown files.
     """
-    def __init__(self, save_path: Optional[Union[str,Path]] = None, file_name:str = "GeneratedMD", title:Optional[str] = None, author:Optional[str] = None, dpi:Optional[int] = None):
+    def __init__(self, save_path: Optional[Union[str,Path]] = None, file_name:str = "GeneratedMD", title:Optional[str] = None, author:Optional[Union[str,List[str]]] = None, dpi:Optional[int] = None):
         """
+        Initialize the markdown generator.
+
         Args:
-            save_path (Optional[Union[str,Path]], optional): Path to save the generated file. Defaults to None.
-                - If None, the current working directory is used.
+            save_path (Optional[Union[str,Path]], optional): Path to save the generated file. If None, the current working directory is used.
             file_name (str, optional): Name of the generated file. Defaults to "GeneratedMD".
             title (str, optional): Title of the document. Defaults to None.
             author (str, optional): Author of the document. Defaults to None.
@@ -47,7 +49,10 @@ class MDGenerator(Section):
         if author is None:
             self.author = ""
         else:
-            self.author = author
+            if isinstance(author, list):
+                self.author = "Authors: " + ", ".join(author)
+            else:
+                self.author = f"Author: {author}"
         
         self.dpi = dpi  # Store dpi for the figures
         
@@ -126,7 +131,7 @@ class MDGenerator(Section):
             section:Section = self.section_search(header)
             section.add_image(fig, caption)
 
-    def add_list(self, header:Optional[str]=None, items:List[str]=[]) -> BaseSection:
+    def add_list(self, header:Optional[str]=None, items:List[str]=[], marked_with:str="-") -> BaseSection:
         """
         Add a list section to the markdown file.
 
@@ -135,10 +140,10 @@ class MDGenerator(Section):
             items (List[str]): Items of the section.
         """
         if header is None:
-            super().add_list(items)
+            super().add_list(items, marked_with)
         else:
             section:Section = self.section_search(header)
-            section.add_list(items)
+            section.add_list(items, marked_with)
 
     def add_link(self, header:Optional[str]=None, link:str="", text:str="") -> BaseSection:
         """
@@ -330,10 +335,10 @@ class MDGenerator(Section):
 
 
 
-if __name__ == "__main__":
-    mdGen = MDGenerator()
-    mdGen.load_json("example/GeneratedMD.json")
-    mdGen.save()
+# if __name__ == "__main__":
+#     mdGen = MDGenerator()
+#     mdGen.load_json("example/GeneratedMD.json")
+#     mdGen.save()
 
     # mdGen = MDGenerator("example", title="Generated Markdown", author="Author")
     # mdGen.add_text("Section 1", "This is the first section.")
