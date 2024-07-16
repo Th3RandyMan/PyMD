@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from collections import UserDict
+from enum import IntEnum
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 from matplotlib.figure import Figure
@@ -7,6 +8,26 @@ from mdutils.mdutils import MdUtils
 import numpy as np
 from pandas import DataFrame
 from .utils import FIGURE_FOLDER
+
+
+class SectionType(IntEnum):
+    """
+    Enum to define the type of section.
+    """
+    TEXT = 0
+    CODE = 1
+    IMAGE = 2
+    TABLE = 3
+    LIST = 4
+    LINK = 5
+    CHECKBOX = 6
+
+    def new_dictionary(self) -> Dict:
+        return {self.TEXT: 0, self.CODE: 0, self.IMAGE: 0, self.TABLE: 0, self.LIST: 0, self.LINK: 0, self.CHECKBOX: 0}
+
+    def __str__(self):
+        return self.name.lower()
+
 
 class BaseSection(ABC):
     """
@@ -38,15 +59,16 @@ class Section(BaseSection, UserDict):
     """
     save_path:Path = None
     dpi:int = None
+    section_headers:List[str] = None
+    section_type_count:Dict[SectionType,int] = None
 
-    def __init__(self, mdFile: MdUtils, header:str, location:str="", section_headers:Optional[List[str]]=None):
+    def __init__(self, mdFile: MdUtils, header:Optional[str] = None, location:Optional[str] = None):
         UserDict.__init__(self)
         BaseSection.__init__(self, mdFile, location)
         self.header = header
-        self.section_headers = section_headers
-        if section_headers is not None:
+        if header is not None:
             self.section_headers.append(self.get_header_location())
-        # self:dict = {}
+
         self.text:int = 0
         self.code:int = 0
         self.image:int = 0
@@ -78,16 +100,16 @@ class Section(BaseSection, UserDict):
                         self.add_text(value["text"])
                     elif value_type == "code":
                         self.add_code(value["code"], value["language"])
-                    elif value_type == "image":
-                        self.add_image(value["image"], value["caption"])
+                    elif value_type == "image_path":
+                        self.add_image(value["image_path"], value["caption"])
                     elif value_type == "table":
                         self.add_table(value["table"], value["columns"], value["rows"])
-                    elif value_type == "list":
-                        self.add_list(value["list"])
+                    elif value_type == "items":
+                        self.add_list(value["items"])
                     elif value_type == "link":
                         self.add_link(value["link"], value["text"])
-                    elif value_type == "checkbox":
-                        self.add_checkbox("", value["text_list"], value["checked"])
+                    elif value_type == "text_list":
+                        self.add_checkbox(value["text_list"], value["checked"])
                 else:
                     raise ValueError(f"Value for key {key} is not a dictionary.")
 
@@ -110,13 +132,11 @@ class Section(BaseSection, UserDict):
             ptr = ptr[k]
         return ptr, keys[-1]
 
-    def __setitem__(self, key:str, section:Union[BaseSection, str, DataFrame, np.ndarray, Figure]):
-        if section is not None and isinstance(section, Section) and section.section_headers is None:
-            self.section_headers.append(self.get_header_location())
-
-        if key[0] == "/":
+    def __setitem__(self, key:str, section:Union[BaseSection, str, DataFrame, np.ndarray, Figure, List[str]]):
+        if len(key) > 0 and key[0] == "/":
             key = key[1:]
         keys = key.split("/")
+        
         if len(keys) > 1:
             ptr, new_key = self.get_section_ptr(keys)
             return ptr.__setitem__(new_key, section)
@@ -124,18 +144,20 @@ class Section(BaseSection, UserDict):
             if isinstance(section, BaseSection):
                 return super().__setitem__(key, section)
             elif isinstance(section, str):
-                self.add_text(section)
+                self[key].add_text(section)
             elif isinstance(section, DataFrame):
-                self.add_table(section)
+                self[key].add_table(section)
             elif isinstance(section, np.ndarray):
-                self.add_table(section)
+                self[key].add_table(section)
             elif isinstance(section, Figure):
-                self.add_image(section)
+                self[key].add_image(section)
+            elif isinstance(section, list):
+                self[key].add_list(section)
             else:
                 raise ValueError("Invalid section type.")
     
     def __getitem__(self, key:str) -> BaseSection:
-        if key[0] == "/":
+        if len(key) > 0 and key[0] == "/":
             key = key[1:]
         keys = key.split("/")
         if len(keys) > 1:
@@ -143,7 +165,7 @@ class Section(BaseSection, UserDict):
             return ptr.__getitem__(new_key)
         else:
             if key not in self:
-                self[key] = Section(self.mdFile, key, self.get_header_location(), self.section_headers)
+                self[key] = Section(self.mdFile, key, self.get_header_location())
             return super().__getitem__(key)
     
     def __delitem__(self, key: str) -> None:     # Need to make this delete all strings with key in it
@@ -151,23 +173,6 @@ class Section(BaseSection, UserDict):
             self.section_headers.remove(key)
         return super().__delitem__(key)
     ### FIX THIS -> MAYBE ADD IN self.get_header_location() instead of key? Or self.get_header_location() + key
-
-    def render(self, level:int=1, space_above:bool=False, space_below:bool=True):
-        if space_above:
-            self.mdFile.new_line()
-        self.mdFile.new_header(level=level, title=self.header)
-        if space_below:
-            self.mdFile.new_line()
-
-        level += 1
-        for section_name, section in self.items():
-            section.render(level=level)
-    
-    def is_valid(self) -> bool:
-        for section_name, section in self:
-            if not section.is_valid():
-                return False
-        return True
     
     def get_header_location(self) -> str:
         """
@@ -176,7 +181,7 @@ class Section(BaseSection, UserDict):
         Returns:
             str: Heading of the section.
         """
-        return self.header if self.location == '' else self.location + '/' + self.header
+        return self.header if self.location == '' or self.location == None else self.location + '/' + self.header
 
     def get_section_name(self, section:BaseSection) -> str:
         """
@@ -192,30 +197,53 @@ class Section(BaseSection, UserDict):
             name = section.header
         elif isinstance(section, TextSection):
             name = f"text{self.text}"
-            self.text += 1
         elif isinstance(section, CodeSection):
             name = f"code{self.code}"
-            self.code += 1
         elif isinstance(section, ImageSection):
             name = f"image{self.image}"
-            self.image += 1
         elif isinstance(section, TableSection):
             name = f"table{self.table}"
-            self.table += 1
         elif isinstance(section, ListSection):
             name = f"list{self.list}"
-            self.list += 1
         elif isinstance(section, LinkSection):
             name = f"link{self.link}"
-            self.link += 1
         elif isinstance(section, CheckBoxSection):
             name = f"checkbox{self.checkbox}"
-            self.checkbox += 1
         else:
             raise ValueError("Invalid section type.")
         
         return name
-        
+    
+    def update_section_count(self, section:BaseSection) -> None:
+        """
+        Update the section count based on the type of section.
+
+        Args:
+            section (BaseSection): Section object to update the count for.
+        """
+        if isinstance(section, TextSection):
+            self.text += 1
+            self.section_type_count[SectionType.TEXT] += 1
+        elif isinstance(section, CodeSection):
+            self.code += 1
+            self.section_type_count[SectionType.CODE] += 1
+        elif isinstance(section, ImageSection):
+            self.image += 1
+            self.section_type_count[SectionType.IMAGE] += 1
+        elif isinstance(section, TableSection):
+            self.table += 1
+            self.section_type_count[SectionType.TABLE] += 1
+        elif isinstance(section, ListSection):
+            self.list += 1
+            self.section_type_count[SectionType.LIST] += 1
+        elif isinstance(section, LinkSection):
+            self.link += 1
+            self.section_type_count[SectionType.LINK] += 1
+        elif isinstance(section, CheckBoxSection):
+            self.checkbox += 1
+            self.section_type_count[SectionType.CHECKBOX] += 1
+        else:
+            raise ValueError("Invalid section type.")
     
     def add_section(self, heading:Optional[str], section:Optional[BaseSection] = None) -> BaseSection:
         """
@@ -235,41 +263,47 @@ class Section(BaseSection, UserDict):
             else:
                 self[self.get_section_name(section)] = section
                 return section
-
+        if len(heading) > 0 and heading[0] == "/":
+            heading = heading[1:]
         headers = heading.split("/") # Split the heading into subheadings
         head = headers[0]
 
         if len(headers) == 1:  # If there is only one heading left, check if it is this section
             if head not in self.keys():  # If the section does not exist, create it
-                self[head] = Section(self.mdFile, head, self.get_header_location(), self.section_headers)
+                self[head] = Section(self.mdFile, head, self.get_header_location())
 
-                if section is not None:
-                    section = self[head].add_section(None, section)
-                else:
-                    section = self[head]
-            elif section is not None:
+            if section is not None:
                 section = self[head].add_section(None, section)
+            else:
+                section = self[head]
+
         elif len(headers) > 1:
             if head not in self.keys():  # If the section does not exist, create it
-                self[head] = Section(self.mdFile, head, self.get_header_location(), self.section_headers)
+                self[head] = Section(self.mdFile, head, self.get_header_location())
 
             section = self[head].add_section("/".join(headers[1:]), section)   # Recursively add the section to the next level
         
         return section
     
-    def add_text(self, text:str) -> BaseSection:
+    def add_text(self, text:str="\n") -> BaseSection:
         """
         Add a text section to the markdown file.
 
         Args:
+            heading (Optional[str], optional): Heading of the section to add to. Defaults to None.
+                - If None, the text is added to the current section.
             text (str): Text to add to the markdown file.
 
         Returns:
             BaseSection: Text section object.
         """
-        return self.add_section(None, TextSection(self.mdFile, self.get_header_location(), text))
+        section = self.add_section(None, TextSection(self.mdFile, self.get_header_location(), text))
+        if section is not None:
+            self.text += 1
+            self.section_type_count[SectionType.TEXT] += 1
+        return section
     
-    def add_code(self, code:str, language:str="python") -> BaseSection:
+    def add_code(self, code:str="\t", language:str="python") -> BaseSection:
         """
         Add a code section to the markdown file.
 
@@ -280,7 +314,24 @@ class Section(BaseSection, UserDict):
         Returns:
             BaseSection: Code section object.
         """
-        return self.add_section(None, CodeSection(self.mdFile, self.get_header_location(), code, language))
+        section = self.add_section(None, CodeSection(self.mdFile, self.get_header_location(), code, language))
+        if section is not None:
+            self.code += 1
+            self.section_type_count[SectionType.CODE] += 1
+        return section
+    
+    def add_figure(self, figure:Union[Figure,str], caption:str=None) -> BaseSection:
+        """
+        Add a figure section to the markdown file.
+
+        Args:
+            figure (Union[Figure,str]): Figure object or path to the figure file.
+            caption (str, optional): Caption for the figure. Defaults to None.
+
+        Returns:
+            BaseSection: Image section object.
+        """
+        return self.add_image(figure, caption)
     
     def add_image(self, figure:Union[Figure,str], caption:str=None) -> BaseSection:
         """
@@ -298,11 +349,15 @@ class Section(BaseSection, UserDict):
             image_path = self.save_path / FIGURE_FOLDER
             if not image_path.exists():
                 image_path.mkdir()
-            image_path = image_path / f"image{self.image}.png"
+            image_path = image_path / f"image{self.section_type_count[SectionType.IMAGE]}.png"
             figure.savefig(str(image_path), dpi=self.dpi)
             figure = str(image_path)
 
-        return self.add_section(None, ImageSection(self.mdFile, self.get_header_location(), figure, caption))
+        section = self.add_section(None, ImageSection(self.mdFile, self.get_header_location(), figure, caption))
+        if section is not None:
+            self.image += 1
+            self.section_type_count[SectionType.IMAGE] += 1
+        return section
     
     def add_table(self, table:List[str], columns:int=3, rows:int=3) -> BaseSection:
         """
@@ -336,7 +391,11 @@ class Section(BaseSection, UserDict):
         else:
             raise ValueError("Number of columns and rows must be specified.")
 
-        return self.add_section(None, TableSection(self.mdFile, self.get_header_location(), table, columns, rows))
+        section = self.add_section(None, TableSection(self.mdFile, self.get_header_location(), table, columns, rows))
+        if section is not None:
+            self.table += 1
+            self.section_type_count[SectionType.TABLE] += 1
+        return section
     
     def add_list(self, items:list) -> BaseSection:
         """
@@ -348,7 +407,11 @@ class Section(BaseSection, UserDict):
         Returns:
             BaseSection: List section object.
         """
-        return self.add_section(None, ListSection(self.mdFile, self.get_header_location(), items))
+        count = self.add_section(None, ListSection(self.mdFile, self.get_header_location(), items))
+        if count is not None:
+            self.list += 1
+            self.section_type_count[SectionType.LIST] += 1
+        return count
     
     def add_link(self, link:str, text:str) -> BaseSection:
         """
@@ -361,7 +424,11 @@ class Section(BaseSection, UserDict):
         Returns:
             BaseSection: Link section object.
         """
-        return self.add_section(None, LinkSection(self.mdFile, self.get_header_location(), link, text))
+        section = self.add_section(None, LinkSection(self.mdFile, self.get_header_location(), link, text))
+        if section is not None:
+            self.link += 1
+            self.section_type_count[SectionType.LINK] += 1
+        return section
     
     def add_checkbox(self, text_list:List[str], checked:Union[List[bool],bool]=False) -> BaseSection:
         """
@@ -374,7 +441,28 @@ class Section(BaseSection, UserDict):
         Returns:
             BaseSection: Checkbox section object.
         """
-        return self.add_section(None, CheckBoxSection(self.mdFile, self.get_header_location(), text_list, checked))
+        section = self.add_section(None, CheckBoxSection(self.mdFile, self.get_header_location(), text_list, checked))
+        if section is not None:
+            self.checkbox += 1
+            self.section_type_count[SectionType.CHECKBOX] += 1
+        return section
+    
+    def render(self, level:int=1, space_above:bool=False, space_below:bool=True):
+        if space_above:
+            self.mdFile.new_line()
+        self.mdFile.new_header(level=level, title=self.header)
+        if space_below:
+            self.mdFile.new_line()
+
+        level += 1
+        for section_name, section in self.items():
+            section.render(level=level)
+    
+    def is_valid(self) -> bool:
+        for section_name, section in self:
+            if not section.is_valid():
+                return False
+        return True
     
 
 class TextSection(BaseSection):
