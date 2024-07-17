@@ -16,7 +16,7 @@ This packages provides an intuitive way to generate markdown files. While sweepi
 ## Pip
 Use pip to install PyMD:
 ```bash
-pip install .
+pip install RPyMD
 ```  
 
 # Markdown File Examples
