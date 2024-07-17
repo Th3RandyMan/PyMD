@@ -76,6 +76,7 @@ class Section(BaseSection, UserDict):
         self.header = header
         if header is not None:
             self.section_headers.append(self.get_header_location())
+        self.base_name = mdFile.file_name.split("/")[-1].split(".")[0]
 
         self.text:int = 0
         self.code:int = 0
@@ -353,7 +354,7 @@ class Section(BaseSection, UserDict):
             image_path = self.save_path / FIGURE_FOLDER
             if not image_path.exists():
                 image_path.mkdir()
-            image_path = image_path / f"image{self.section_type_count[SectionType.IMAGE]}.png"
+            image_path = image_path / f"{self.base_name}_image{self.section_type_count[SectionType.IMAGE]}.png"
             figure.savefig(str(image_path), dpi=self.dpi)
             figure = str(image_path)
 

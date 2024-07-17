@@ -36,7 +36,7 @@ class AssignmentTypes(unittest.TestCase):
 
         with open("example/GeneratedMD.md", "r") as f:
             data = f.read()
-            self.assertIn("example/figures/image0.png", data)
+            self.assertIn("figures/GeneratedMD_image0.png", data)
 
     def test_dataframe_assignment(self):
         self.setup()
